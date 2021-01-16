@@ -4,6 +4,9 @@
 #include "HTim.h"
 #include "backlight.h"
 #include "iap.h"
+#include "usart.h"
+#include "F4G.h"
+#include "wifi.h"
 
 /**
  **===========================================================================
@@ -14,7 +17,7 @@
  */
 int main(void)
 {
-	struct STRUCT_USART_Fram *fram = &USART1_Fram;
+	u8 net = InUsart1;
 	delay_init(168);  	//时钟初始化
 	NVIC_PriorityGroupConfig(NVIC_PriorityGroup_2);  	//中断分组配置
 	my_mem_init();
@@ -28,41 +31,37 @@ int main(void)
 	IAP_Init(); //初始化
 	//检查是否需要本地更新
 	delay_ms(1000);
-	delay_ms(1000);
 	printf("{localUpdate?}\r\n");
 	delay_ms(1000);
 	delay_ms(1000);
-
 	if (!localUpdate)
 	{
-		//需要连接wifi
-		if (WIFI_Fram.AT_test_OK != 0 && MyFlashParams.WifiFlag == WIFI_FLAG)
+		//如果wifi上电成功
+		if (Wifi_PowerOn())
 		{
-			WIFI_Fram.allowHeart = ConnectToServerByWIFI(TCP_IP, TCP_PORT);
-		}
-		if (WIFI_Fram.allowHeart == 0)
-		{
-			F4G_Fram.allowHeart = ConnectToServerBy4G(TCP_IP, TCP_PORT);
-			fram = &F4G_Fram;
+			net = InWifi;
 		}
 		else
 		{
-			fram = &WIFI_Fram;
+			F4G_PowerOn();
+			net = In4G;
 		}
 	}
-
 	while (1)
 	{
 		switch (MyFlashParams.IAPFlag)
 		{
 		case IAP_APPRUN_FLAG_DATA:  //jump to app
-			IAP_RunApp();
+			if (IAP_RunApp())
+			{
+				MyFlashParams.IAPFlag = IAP_INIT_FLAG_DATA;
+			}
 			break;
 		case IAP_INIT_FLAG_DATA:  //initialze state (blank mcu)
-			IAP_Main_Menu(fram);
+			IAP_Main_Menu(net);
 			break;
 		case IAP_UPDATE_FLAG_DATA:  // download app state
-			if (IAP_Update(fram))
+			if (IAP_Update(net))
 			{
 				NVIC_SystemReset();
 			}
@@ -71,20 +70,8 @@ int main(void)
 				MyFlashParams.IAPFlag = IAP_INIT_FLAG_DATA;
 			}
 			break;
-		case IAP_UPLOAD_FLAG_DATA:  // upload app state
-			IAP_Upload();
-			MyFlashParams.IAPFlag = IAP_INIT_FLAG_DATA;
-			break;
-		case IAP_ERASE_FLAG_DATA:		// erase app state
-			IAP_Erase();
-			MyFlashParams.IAPFlag = IAP_INIT_FLAG_DATA;
-			break;
 		case IAP_SET_DeviceID_FLAG_DATA:		// set DeviceID
-			Set_DeviceID();
-			break;
-		case IAP_GET_DeviceID_FLAG_DATA:		// read DeviceID
-			Get_DeviceID();
-			MyFlashParams.IAPFlag = IAP_INIT_FLAG_DATA;
+			IAP_Set_DeviceID(net);
 			break;
 		default:
 			break;

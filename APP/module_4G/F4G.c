@@ -21,8 +21,8 @@ void USART3_Init(u32 bound)
 			(uint32_t) F4G_Fram.TxBuf, BASE64_BUF_LEN, DMA_Priority_High);
 
 	DMA_USART_Rx_Init(USART3, RCC_AHB1Periph_DMA1, DMA1_Stream1, DMA_Channel_4,
-			(uint32_t) (&USART3->DR), (uint32_t) F4G_Fram.RxBuf,
-			TCP_MAX_LEN, DMA_Priority_VeryHigh);
+			(uint32_t) (&USART3->DR), (uint32_t) F4G_Fram.RxBuf, TCP_MAX_LEN,
+			DMA_Priority_VeryHigh);
 	//=====================================================================================================
 	USART_InitStructure.USART_BaudRate = bound; //波特率设置
 	USART_InitStructure.USART_WordLength = USART_WordLength_8b; //字长为8位数据格式
@@ -84,85 +84,157 @@ bool ConnectToServerBy4G(char* addr, char* port)
 	F4G_Fram.allowHeart = 0;
 	char *p = mymalloc(100);
 	sprintf(p, "AT+CIPSTART=\"TCP\",\"%s\",%s", addr, port);
-	Send_AT_Cmd(In4G, "AT+CIPSHUT", "SHUT OK", NULL, 100, 2);
-	Send_AT_Cmd(In4G, "AT+CREG?", "OK", NULL, 100, 2);
-	Send_AT_Cmd(In4G, "AT+CGATT?", "OK", NULL, 100, 2);
+	Send_AT_Cmd(In4G, "AT+CIPSHUT", "SHUT OK", NULL, 100, 2, ENABLE);
+	Send_AT_Cmd(In4G, "AT+CREG?", "OK", NULL, 100, 2, ENABLE);
+	Send_AT_Cmd(In4G, "AT+CGATT?", "OK", NULL, 100, 2, ENABLE);
 	//单链接
-	Send_AT_Cmd(In4G, "AT+CIPMUX=0", "OK", NULL, 100, 2);
+	Send_AT_Cmd(In4G, "AT+CIPMUX=0", "OK", NULL, 100, 2, ENABLE);
 	//快传
-	Send_AT_Cmd(In4G, "AT+CIPQSEND=1", "OK", NULL, 100, 2);
-	if (TCP_Params.cops == '3')
+	Send_AT_Cmd(In4G, "AT+CIPQSEND=1", "OK", NULL, 100, 2, ENABLE);
+	if (MyFlashParams.cops == '3')
 	{
-		Send_AT_Cmd(In4G, "AT+CSTT=cmiot", "OK", NULL, 360, 2);
+		Send_AT_Cmd(In4G, "AT+CSTT=cmiot", "OK", NULL, 360, 2, ENABLE);
 	}
-	else if (TCP_Params.cops == '6')
+	else if (MyFlashParams.cops == '6')
 	{
-		Send_AT_Cmd(In4G, "AT+CSTT=UNIM2M.NJM2MAPN", "OK", NULL, 360, 2);
+		Send_AT_Cmd(In4G, "AT+CSTT=UNIM2M.NJM2MAPN", "OK", NULL, 360, 2,
+				ENABLE);
 	}
-	else if (TCP_Params.cops == '9')
+	else if (MyFlashParams.cops == '9')
 	{
-		Send_AT_Cmd(In4G, "AT+CSTT=CTNET", "OK", NULL, 360, 2);
+		Send_AT_Cmd(In4G, "AT+CSTT=CTNET", "OK", NULL, 360, 2, ENABLE);
 	}
-	Send_AT_Cmd(In4G, "AT+CIICR", "OK", NULL, 100, 2);
-	Send_AT_Cmd(In4G, "AT+CIFSR", "OK", NULL, 100, 2);
-	Send_AT_Cmd(In4G, p, "CONNECT", NULL, 360, 2);
-	res = Send_AT_Cmd(In4G, "AT+CIPSTATUS", "CONNECT OK", NULL, 360, 2);
+	Send_AT_Cmd(In4G, "AT+CIICR", "OK", NULL, 100, 2, ENABLE);
+	Send_AT_Cmd(In4G, "AT+CIFSR", "OK", NULL, 100, 2, ENABLE);
+	Send_AT_Cmd(In4G, p, "CONNECT", NULL, 360, 2, ENABLE);
+	res = Send_AT_Cmd(In4G, "AT+CIPSTATUS", "CONNECT OK", NULL, 360, 2, ENABLE);
 	myfree(p);
 	return res;
+}
+/**
+ * 4G模块执行上电
+ * @return 0-失败  1-成功
+ */
+u8 F4G_PowerOn(void)
+{
+	//1.检查模块是否需要重新开关机
+	F4G_Fram.AT_test_OK = AT_Test(In4G);
+	if (!F4G_Fram.AT_test_OK)
+	{
+		//2.执行开关机操作
+		_F4G_PKEY = 1;
+		delay_ms(1000);
+		delay_ms(1000);
+		delay_ms(1000);
+		delay_ms(1000);
+		_F4G_PKEY = 0;
+		//复位4G模块
+		_F4G_RST = 1;
+		delay_ms(1100);
+		_F4G_RST = 0;
+		delay_ms(500);
+		//3.再次检查模块是否正常工作
+		F4G_Fram.AT_test_OK = AT_Test(In4G);
+	}
+	//4.如果模块已经正常工作
+	if (F4G_Fram.AT_test_OK)
+	{
+		//5.获取模块相关的一些参数
+		getModuleMes();
+		//6.执行TCP连接
+		while (!F4G_Fram.Online)
+		{
+			F4G_Fram.Online = ConnectToServerBy4G(TCP_IP, TCP_PORT);
+		}
+		return F4G_Fram.Online;
+	}
+	return 0;
 }
 /***********************以下开始为与服务器通信业务代码部分*************************************/
 void getModuleMes(void)
 {
 	unsigned char *result = NULL;
 	u8 inx = 0;
-	//获取物联网卡号
-	while (!Send_AT_Cmd(In4G, "AT+ICCID", "+ICCID:", NULL, 100, 2))
-		;
-	result = F4G_Fram.RxBuf;
-	inx = 0;
-	while (!(*result <= '9' && *result >= '0'))
+	u8 cnt = 0;
+	do
 	{
-		result++;
-	}
-	//当值为字母和数字时
-	while ((*result <= '9' && *result >= '0')
-			|| (*result <= 'Z' && *result >= 'A')
-			|| (*result <= 'z' && *result >= 'a'))
-	{
-		TCP_Params.ccid[inx++] = *result;
-		result++;
-	}
-	DEBUG("CCID=%s\r\n", TCP_Params.ccid);
-
+		if (cnt++ > 3)  //三次还未获取到卡号
+		{
+			DEBUG("use last CCID=%s\r\n", MyFlashParams.ccid);
+			break;
+		}
+		//获取物联网卡号
+		if (Send_AT_Cmd(In4G, "AT+ICCID", "+ICCID:", NULL, 100, 2, ENABLE))
+		{
+			result = F4G_Fram.RxBuf;
+			inx = 0;
+			while (!(*result <= '9' && *result >= '0'))
+			{
+				result++;
+			}
+			//当值为字母和数字时
+			while ((*result <= '9' && *result >= '0')
+					|| (*result <= 'Z' && *result >= 'A')
+					|| (*result <= 'z' && *result >= 'a'))
+			{
+				MyFlashParams.ccid[inx++] = *result;
+				result++;
+			}
+			DEBUG("current CCID=%s\r\n", MyFlashParams.ccid);
+			break;
+		}
+	} while (1);
 	//获取模块网络信息
-	while (!Send_AT_Cmd(In4G, "AT+COPS=0,1", "OK", NULL, 200, 2))
-		;
-	while (!Send_AT_Cmd(In4G, "AT+COPS?", "+COPS", NULL, 100, 2))
-		;
-	if ((bool) strstr((const char *) F4G_Fram.RxBuf, "CMCC"))
+	cnt = 0;
+	do
 	{
-		TCP_Params.cops = '3';
-	}
-	else if ((bool) strstr((const char *) F4G_Fram.RxBuf, "UNICOM"))
-	{
-		TCP_Params.cops = '6';
-	}
-	else
-	{
-		TCP_Params.cops = '9';
-	}
-	DEBUG("COPS is \"%c\"\r\n", TCP_Params.cops);
+		if (cnt++ > 3)
+		{
+			DEBUG("use last COPS=%c\r\n", MyFlashParams.cops);
+			break;
+		}
+		if (Send_AT_Cmd(In4G, "AT+COPS=0,1", "OK", NULL, 200, 2, ENABLE))
+		{
+			if (Send_AT_Cmd(In4G, "AT+COPS?", "+COPS", NULL, 100, 2, ENABLE))
+			{
+				if (strstr((const char *) F4G_Fram.RxBuf, "CMCC"))
+				{
+					MyFlashParams.cops = '3';
+				}
+				else if (strstr((const char *) F4G_Fram.RxBuf, "UNICOM"))
+				{
+					MyFlashParams.cops = '6';
+				}
+				else
+				{
+					MyFlashParams.cops = '9';
+				}
+				DEBUG("current COPS is \"%c\"\r\n", MyFlashParams.cops);
+				break;
+			}
+		}
+	} while (1);
 	//获取信号
-	while (!Send_AT_Cmd(In4G, "AT+CSQ", "+CSQ", NULL, 100, 2))
-		;
-	result = F4G_Fram.RxBuf;
-	while (*result++ != ':')
-		;
-	result++;
-	TCP_Params.rssi = atoi(strtok((char *) result, ","));
-	DEBUG("CSQ is %d\r\n", TCP_Params.rssi);
+	cnt = 0;
+	do
+	{
+		if (cnt++ > 3)
+		{
+			DEBUG("set CSQ=0.\r\n");
+			break;
+		}
+		if (Send_AT_Cmd(In4G, "AT+CSQ", "+CSQ", NULL, 100, 2, ENABLE))
+		{
+			result = F4G_Fram.RxBuf;
+			while (*result++ != ':')
+				;
+			result++;
+			MyFlashParams.rssi = atoi(strtok((char *) result, ","));
+			DEBUG("current CSQ is %d\r\n", MyFlashParams.rssi);
+			break;
+		}
+	} while (1);
 }
-
 /**
  * 通过4G网络发送数据
  * @data 待发送的数据
@@ -173,12 +245,14 @@ void Module4G_Send(const char *data)
 	char *p_str;
 	char *buf = mymalloc(20);
 	p_str = mymalloc(BASE64_BUF_LEN);
-	base64_encode((const unsigned char *)data, p_str);
+	memset(buf, '\0', 20);
+	memset(p_str, '\0', BASE64_BUF_LEN);
+	base64_encode((const unsigned char *) data, p_str);
 	snprintf(buf, 20, "AT+CIPSEND=%d", strlen((const char *) p_str) + 3);
-	if (Send_AT_Cmd(In4G, buf, ">", NULL, 200, 2))
+	if (Send_AT_Cmd(In4G, buf, ">", NULL, 200, 2, DISABLE))
 	{
 		_USART_Printf(In4G, "{(%s}", p_str);
-		DEBUG("<<%s", data);
+		DEBUG("<<%s\r\n", data);
 	}
 	myfree(p_str);
 	myfree(buf);
@@ -217,32 +291,33 @@ void USART3_IRQHandler(void)
 		F4G_Fram.DMA_Tx_Busy = 0;
 #if SYSTEM_SUPPORT_OS
 		//推送发送完成
-		OSFlagPost((OS_FLAG_GRP*) &EventFlags, //对应的事件标志组
-				(OS_FLAGS) FLAG_USART3_TxED, //事件位
-				(OS_OPT) OS_OPT_POST_FLAG_SET, //选择置位
-				(OS_ERR*) &err); //错误码
+		OSFlagPost((OS_FLAG_GRP*) &EventFlags,//对应的事件标志组
+				(OS_FLAGS) FLAG_USART3_TxED,//事件位
+				(OS_OPT) OS_OPT_POST_FLAG_SET,//选择置位
+				(OS_ERR*) &err);//错误码
 #endif
 	}
 	if (USART_GetITStatus(USART3, USART_IT_IDLE) != RESET)
 	{
 		USART3->SR; //先读SR，再读DR
 		USART3->DR;
-
-		F4G_Fram.InfBit.FinishFlag = 1; //接收到一帧数据
-
 		//关闭DMA
 		DMA_Cmd(DMA1_Stream1, DISABLE);
 		//清除标志位
 		DMA_ClearFlag(DMA1_Stream1, DMA_FLAG_TCIF1);
+
 		//获得接收帧帧长
 		F4G_Fram.AccessLen = TCP_MAX_LEN - DMA_GetCurrDataCounter(DMA1_Stream1);
+		F4G_Fram.RxBuf[F4G_Fram.AccessLen] = '\0'; //添加结束符
+
+		F4G_Fram.FinishFlag = 1;
 		//这里可以通知任务来处理数据
 #if SYSTEM_SUPPORT_OS
 		//推送接收完成
-		OSFlagPost((OS_FLAG_GRP*) &EventFlags, //对应的事件标志组
-				(OS_FLAGS) FLAG_USART3_RxED, //事件位
-				(OS_OPT) OS_OPT_POST_FLAG_SET, //选择置位
-				(OS_ERR*) &err); //错误码
+		OSFlagPost((OS_FLAG_GRP*) &EventFlags,//对应的事件标志组
+				(OS_FLAGS) FLAG_USART3_RxED,//事件位
+				(OS_OPT) OS_OPT_POST_FLAG_SET,//选择置位
+				(OS_ERR*) &err);//错误码
 #endif
 		//设置传输数据长度
 		DMA_SetCurrDataCounter(DMA1_Stream1, TCP_MAX_LEN);

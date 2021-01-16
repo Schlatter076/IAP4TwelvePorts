@@ -94,10 +94,10 @@ void USART1_IRQHandler(void)                	//串口1中断服务程序
 		USART1_Fram.DMA_Tx_Busy = 0;
 #if SYSTEM_SUPPORT_OS
 		//推送发送完成
-		OSFlagPost((OS_FLAG_GRP*) &EventFlags, //对应的事件标志组
-				(OS_FLAGS) FLAG_USART1_TxED, //事件位
-				(OS_OPT) OS_OPT_POST_FLAG_SET, //选择置位
-				(OS_ERR*) &err); //错误码
+		OSFlagPost((OS_FLAG_GRP*) &EventFlags,//对应的事件标志组
+				(OS_FLAGS) FLAG_USART1_TxED,//事件位
+				(OS_OPT) OS_OPT_POST_FLAG_SET,//选择置位
+				(OS_ERR*) &err);//错误码
 #endif
 	}
 	if (USART_GetITStatus(USART1, USART_IT_IDLE) != RESET)
@@ -105,22 +105,29 @@ void USART1_IRQHandler(void)                	//串口1中断服务程序
 		USART1->SR; //先读SR，再读DR
 		USART1->DR;
 
-		USART1_Fram.InfBit.FinishFlag = 1;
-
 		//关闭DMA
 		DMA_Cmd(DMA2_Stream2, DISABLE);
 		//清除标志位
 		DMA_ClearFlag(DMA2_Stream2, DMA_FLAG_TCIF2);
+
 		//获得接收帧帧长
 		USART1_Fram.AccessLen = TCP_MAX_LEN
 				- DMA_GetCurrDataCounter(DMA2_Stream2);
+		USART1_Fram.RxBuf[USART1_Fram.AccessLen] = '\0'; //添加结束符
+		USART1_Fram.FinishFlag = 1;
+
+		if (strchr((const char *) USART1_Fram.RxBuf, '$'))
+		{
+			localUpdate = true;
+			USART1_Fram.FinishFlag = 0;
+		}
 		//这里可以通知任务来处理数据
 #if SYSTEM_SUPPORT_OS
 		//推送接收完成
-		OSFlagPost((OS_FLAG_GRP*) &EventFlags, //对应的事件标志组
-				(OS_FLAGS) FLAG_USART1_RxED, //事件位
-				(OS_OPT) OS_OPT_POST_FLAG_SET, //选择置位
-				(OS_ERR*) &err); //错误码
+		OSFlagPost((OS_FLAG_GRP*) &EventFlags,//对应的事件标志组
+				(OS_FLAGS) FLAG_USART1_RxED,//事件位
+				(OS_OPT) OS_OPT_POST_FLAG_SET,//选择置位
+				(OS_ERR*) &err);//错误码
 #endif
 		//设置传输数据长度
 		DMA_SetCurrDataCounter(DMA2_Stream2, TCP_MAX_LEN);

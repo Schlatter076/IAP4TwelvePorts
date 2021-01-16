@@ -6,7 +6,7 @@
  */
 #include "HTim.h"
 
-bool updating = 0;
+bool updating = false;
 
 u16 init_cnt = 0;
 u16 update_cnt = 0;

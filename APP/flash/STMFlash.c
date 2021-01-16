@@ -93,22 +93,36 @@ static void STMFLASH_Read(u32 ReadAddr, u32 *pBuffer, u32 NumToRead)
  */
 void STMFlash_Init(void)
 {
+	//===================本地调试时使用===============================================
+//	strcpy((char *) MyFlashParams.DeviceID, "PM610001");
+//	strcpy((char *) MyFlashParams.Version, "tweleve1229");
+//	strcpy((char *) MyFlashParams.ServerParams,
+//			"aaaaaaaaaaaaaaaa-server.dayitc.com:13401-1-5-2");
+//	strcpy((char *)MyFlashParams.WifiSSID, "HHS_1C1C");
+//	strcpy((char *)MyFlashParams.WifiPWD, "hhs123456");
+//	memset(MyFlashParams.IgnoreLock, 0, 12);
+//	MyFlashParams.WifiFlag = WIFI_FLAG;
+	//===================本地调试时使用===============================================
+
 	//填充参数
 	STMFLASH_Read(DEVICE_ID_ADDR, (u32 *) &MyFlashParams.DeviceID[0], 2);
 	STMFLASH_Read(VERSION_ADDR, (u32 *) &MyFlashParams.Version[0], 5);
 	STMFLASH_Read(IGNORE_LOCK_ADDR, (u32 *) &MyFlashParams.IgnoreLock[0], 3);
 	STMFLASH_Read(APP_SERVER_ADDR, (u32 *) &MyFlashParams.ServerParams[0], 25);
 	STMFLASH_Read(WIFI_SSID_ADDR, (u32 *) &MyFlashParams.WifiSSID[0], 25);
-	STMFLASH_Read(WIFI_PWD_ADDR, (u32 *) &MyFlashParams.WifiPWD[0], 2);
+	STMFLASH_Read(WIFI_PWD_ADDR, (u32 *) &MyFlashParams.WifiPWD[0], 25);
 	STMFLASH_Read(WIFI_FLAG_ADDR, (u32 *) &MyFlashParams.WifiFlag, 1);
-
 	MyFlashParams.IAPFlag = IAP_INIT_FLAG_DATA;
+	STMFLASH_Read(CCID_ADDR, (u32 *) &MyFlashParams.ccid, 5);
+	MyFlashParams.cops = *(vu8 *)COPS_ADDR;
+	MyFlashParams.rssi = 0;
 	//添加结束符
 	MyFlashParams.DeviceID[8] = '\0';
 	MyFlashParams.Version[20] = '\0';
 	MyFlashParams.ServerParams[100] = '\0';
 	MyFlashParams.WifiSSID[100] = '\0';
 	MyFlashParams.WifiPWD[100] = '\0';
+	MyFlashParams.ccid[20] = '\0';
 }
 /**
  * 写入所有参数
@@ -131,6 +145,8 @@ void MyFlash_Write(struct AboutFlash_typeDef *def)
 	STMFLASH_Write(WIFI_SSID_ADDR, (u32 *) &def->WifiSSID[0], 25);
 	STMFLASH_Write(WIFI_PWD_ADDR, (u32 *) &def->WifiPWD[0], 25);
 	STMFLASH_Write(WIFI_FLAG_ADDR, (u32 *) &def->WifiFlag, 1);
+	STMFLASH_Write(CCID_ADDR, (u32 *) &def->ccid, 5);
+	FLASH_ProgramByte(COPS_ADDR, def->cops);
 	FLASH_DataCacheCmd(ENABLE);	//FLASH擦除结束,开启数据缓存
 	FLASH_Lock();	//上锁
 #if SYSTEM_SUPPORT_OS

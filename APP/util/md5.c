@@ -1,7 +1,7 @@
 /*
  * md5.c
  *
- *  Created on: 2020Äê7ÔÂ13ÈÕ
+ *  Created on: 2020ï¿½ï¿½7ï¿½ï¿½13ï¿½ï¿½
  *      Author: loyer
  */
 #include <memory.h>
@@ -171,19 +171,18 @@ void getMD5Str(char md5Buf[], unsigned char buf[], long size)
 {
 	unsigned char i;
 	unsigned char decrypt[16];
-	char temp[2];
+	char temp[3];
 	MD5_CTX md5CTX;
 	MD5Init(&md5CTX);
 	MD5Update(&md5CTX, buf, size);
 	MD5Final(&md5CTX, decrypt);
 
-	printf("origin md5=");
 	for (i = 0; i < 16; i++)
 	{
-		printf("%02x", decrypt[i]);
-		sprintf(temp, "%02x", decrypt[i]);
-		strncat((char *) md5Buf, temp, 2);
+		memset(temp, '\0', 3);
+		snprintf(temp, 3, "%02x", decrypt[i]);
+		strcat(md5Buf, temp);
 	}
-	printf("\r\n");
+	md5Buf[32] = '\0';
 }
 

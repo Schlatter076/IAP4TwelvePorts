@@ -33,8 +33,7 @@ void L74HC595_Init(void)
  */
 void HC595_Send_Byte(u8 byte)
 {
-	u8 i;
-	for (i = 0; i < 8; i++)  //一个字节8位，传输8次，一次一位，循环8次，刚好移完8位
+	for (u8 i = 0; i < 8; i++)  //一个字节8位，传输8次，一次一位，循环8次，刚好移完8位
 	{
 		/****  步骤1：将数据传到DS引脚    ****/
 		if (byte & 0x80)        //先传输高位，通过与运算判断第八是否为1
@@ -51,38 +50,54 @@ void HC595_Send_Byte(u8 byte)
 		byte <<= 1;		// 左移一位，将低位往高位移，通过	if (byte & 0x80)判断低位是否为1
 	}
 	//输出锁存使能
-//	_HC595_LATCH = 0;
-//	delay_us(1);
-//	_HC595_LATCH = 1;
-//	delay_us(1);
-}
-
-void HC595_Send_Multi_Bytes(u8 *bytes, u16 len)
-{
-	for (int i = 0; i < len; i++)
-	{
-		HC595_Send_Byte(bytes[i]);
-	}
-	//输出锁存使能
 	_HC595_LATCH = 0;
 	delay_us(1);
 	_HC595_LATCH = 1;
 	delay_us(1);
 }
 
+void HC595_Send_Multi_Bytes(u8 *bytes, u16 len)
+{
+	u8 temp;
+	_HC595_LATCH = 0;
+	for (; len > 0; len--)
+	{
+		temp = *bytes;
+		for (int i = 0; i < 8; i++)
+		{
+			_HC595_CLK = 0; //时钟低电平
+			if (temp & 0x80)        //先传输高位，通过与运算判断第八是否为1
+				_HC595_DATA = 1;    //如果第八位是1，则与 595 DS连接的引脚输出高电平
+			else
+				//否则输出低电平
+				_HC595_DATA = 0;
+
+			delay_us(1);           // 适当延时
+			_HC595_CLK = 1;  // 时钟高电平
+			delay_us(5);
+			temp <<= 1;  //数据左移一位
+		}
+		bytes++;
+	}
+	//输出锁存使能
+	_HC595_LATCH = 1;
+	delay_us(1);
+	_HC595_LATCH = 0;
+}
+
 void ledON(u8 led)
 {
 	if (led < 5)
 	{
-		HC595_STATUS.LAST_LED_STATU[0] &= ~(1 << (led - 1));
+		HC595_STATUS.LAST_LED_STATU[0] &= ~(1 << (3 - (led - 1)));
 	}
 	else if (led < 9)
 	{
-		HC595_STATUS.LAST_LED_STATU[1] &= ~(1 << (led - 1));
+		HC595_STATUS.LAST_LED_STATU[1] &= ~(1 << (led - 5));
 	}
 	else
 	{
-		HC595_STATUS.LAST_LED_STATU[2] &= ~(1 << (led - 1));
+		HC595_STATUS.LAST_LED_STATU[2] &= ~(1 << (3 - (led - 9)));
 	}
 	HC595_Send_Multi_Bytes(HC595_STATUS.LAST_LED_STATU, 3);
 }
@@ -90,15 +105,15 @@ void ledOFF(u8 led)
 {
 	if (led < 5)
 	{
-		HC595_STATUS.LAST_LED_STATU[0] |= (1 << (led - 1));
+		HC595_STATUS.LAST_LED_STATU[0] |= (1 << (3 - (led - 1)));
 	}
 	else if (led < 9)
 	{
-		HC595_STATUS.LAST_LED_STATU[1] |= (1 << (led - 1));
+		HC595_STATUS.LAST_LED_STATU[1] |= (1 << (led - 5));
 	}
 	else
 	{
-		HC595_STATUS.LAST_LED_STATU[2] |= (1 << (led - 1));
+		HC595_STATUS.LAST_LED_STATU[2] |= (1 << (3 - (led - 9)));
 	}
 	HC595_Send_Multi_Bytes(HC595_STATUS.LAST_LED_STATU, 3);
 }
@@ -106,15 +121,15 @@ void ledBLINK(u8 led)
 {
 	if (led < 5)
 	{
-		HC595_STATUS.LAST_LED_STATU[0] ^= (1 << (led - 1));
+		HC595_STATUS.LAST_LED_STATU[0] ^= (1 << (3 - (led - 1)));
 	}
 	else if (led < 9)
 	{
-		HC595_STATUS.LAST_LED_STATU[1] ^= (1 << (led - 1));
+		HC595_STATUS.LAST_LED_STATU[1] ^= (1 << (led - 5));
 	}
 	else
 	{
-		HC595_STATUS.LAST_LED_STATU[2] ^= (1 << (led - 1));
+		HC595_STATUS.LAST_LED_STATU[2] ^= (1 << (3 - (led - 9)));
 	}
 	HC595_Send_Multi_Bytes(HC595_STATUS.LAST_LED_STATU, 3);
 }

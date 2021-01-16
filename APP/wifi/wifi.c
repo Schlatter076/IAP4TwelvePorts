@@ -16,7 +16,7 @@ void USART2_Init(u32 bound)
 	USART_DeInit(USART2);
 	RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART2, ENABLE);
 	//=====================================================================================================
-	DMA_USART_Tx_Init(USART2, RCC_AHB1Periph_DMA1, DMA1_Stream6_IRQn, 1, 2,
+	DMA_USART_Tx_Init(USART2, RCC_AHB1Periph_DMA1, DMA1_Stream6_IRQn, 0, 1,
 	DMA1_Stream6, DMA_Channel_4, (uint32_t) (&USART2->DR),
 			(uint32_t) WIFI_Fram.TxBuf, BASE64_BUF_LEN, DMA_Priority_High);
 
@@ -34,8 +34,8 @@ void USART2_Init(u32 bound)
 	USART_Init(USART2, &USART_InitStructure); //初始化串口
 
 	NVIC_InitStructure.NVIC_IRQChannel = USART2_IRQn;
-	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;  //抢占优先级
-	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 2;  //子优先级
+	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;  //抢占优先级
+	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 1;  //子优先级
 	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;  //IRQ通道使能
 	NVIC_Init(&NVIC_InitStructure);  //根据指定的参数初始化VIC寄存器
 
@@ -83,14 +83,15 @@ bool WIFI_Net_Mode_Choose(ENUM_Net_ModeTypeDef enumMode)
 	{
 	case STA:
 		return Send_AT_Cmd(InWifi, "AT+CWMODE_CUR=1", "OK", "no change", 1800,
-				2);
+				2, ENABLE);
 
 	case AP:
 		return Send_AT_Cmd(InWifi, "AT+CWMODE_CUR=2", "OK", "no change", 1800,
-				2);
+				2, ENABLE);
 
 	case STA_AP:
-		return Send_AT_Cmd(InWifi, "AT+CWMODE_CUR", "OK", "no change", 1800, 2);
+		return Send_AT_Cmd(InWifi, "AT+CWMODE_CUR", "OK", "no change", 1800, 2,
+				ENABLE);
 
 	default:
 		return false;
@@ -109,7 +110,7 @@ bool WIFI_JoinAP(char * pSSID, char * pPassWord)
 	bool ret = false;
 	cCmd = mymalloc(120);
 	snprintf(cCmd, 120, "AT+CWJAP_CUR=\"%s\",\"%s\"", pSSID, pPassWord);
-	ret = Send_AT_Cmd(InWifi, cCmd, "OK", NULL, 1800, 2);
+	ret = Send_AT_Cmd(InWifi, cCmd, "OK", NULL, 1800, 2, ENABLE);
 	myfree(cCmd);
 	return ret;
 }
@@ -125,7 +126,7 @@ bool WIFI_Enable_MultipleId(FunctionalState enumEnUnvarnishTx)
 	bool ret = false;
 	cStr = mymalloc(20);
 	snprintf(cStr, 20, "AT+CIPMUX=%d", (enumEnUnvarnishTx ? 1 : 0));
-	ret = Send_AT_Cmd(InWifi, cStr, "OK", 0, 500, 2);
+	ret = Send_AT_Cmd(InWifi, cStr, "OK", 0, 500, 2, ENABLE);
 	return ret;
 }
 
@@ -164,7 +165,7 @@ bool WIFI_Link_Server(ENUM_NetPro_TypeDef enumE, char * ip, char* ComNum,
 	else
 		sprintf(cCmd, "AT+CIPSTART=%s", cStr);
 
-	rc = Send_AT_Cmd(InWifi, cCmd, "OK", "ALREAY CONNECT", 1800, 2);
+	rc = Send_AT_Cmd(InWifi, cCmd, "OK", "ALREAY CONNECT", 1800, 2, ENABLE);
 	myfree(cStr);
 	myfree(cCmd);
 	return rc;
@@ -176,10 +177,10 @@ bool WIFI_Link_Server(ENUM_NetPro_TypeDef enumE, char * ip, char* ComNum,
  */
 bool WIFI_UnvarnishSend(void)
 {
-	if (!Send_AT_Cmd(InWifi, "AT+CIPMODE=1", "OK", 0, 500, 2))
+	if (!Send_AT_Cmd(InWifi, "AT+CIPMODE=1", "OK", 0, 500, 2, ENABLE))
 		return false;
 
-	return Send_AT_Cmd(InWifi, "AT+CIPSEND", "OK", ">", 500, 2);
+	return Send_AT_Cmd(InWifi, "AT+CIPSEND", "OK", ">", 500, 2, ENABLE);
 
 }
 
@@ -226,12 +227,14 @@ void WIFI_Send(const char *data)
 	char *p_str;
 	char *buf = mymalloc(20);
 	p_str = mymalloc(BASE64_BUF_LEN);
+	memset(buf, '\0', 20);
+	memset(p_str, '\0', BASE64_BUF_LEN);
 	base64_encode((const unsigned char *) data, p_str);
 	snprintf(buf, 20, "AT+CIPSENDEX=%d", strlen((const char *) p_str) + 3);
-	if (Send_AT_Cmd(InWifi, buf, ">", NULL, 200, 2))
+	if (Send_AT_Cmd(InWifi, buf, "> ", NULL, 200, 2, DISABLE))
 	{
 		_USART_Printf(InWifi, "{(%s}", p_str);
-		DEBUG("wifi<<%s", data);
+		DEBUG("wifi<<%s\r\n", data);
 	}
 	myfree(p_str);
 	myfree(buf);
@@ -254,7 +257,7 @@ void WIFI_ExitUnvarnishSend(void)
  */
 u8 WIFI_Get_LinkStatus(void)
 {
-	if (Send_AT_Cmd(InWifi, "AT+CIPSTATUS", "OK", 0, 500, 2))
+	if (Send_AT_Cmd(InWifi, "AT+CIPSTATUS", "OK", 0, 500, 2, DISABLE))
 	{
 		if (strstr((const char *) WIFI_Fram.RxBuf, "STATUS:2\r\n"))
 			return 2;
@@ -271,6 +274,7 @@ u8 WIFI_Get_LinkStatus(void)
 bool ConnectToServerByWIFI(char* addr, char* port)
 {
 	u8 cnt = 0;
+	WIFI_Fram.allowHeart = 0;
 	WIFI_Net_Mode_Choose(STA);
 	//Send_AT_Cmd(InWifi, "AT+GMR", "OK", NULL, 500, 2);
 	while (cnt < 8)
@@ -285,13 +289,44 @@ bool ConnectToServerByWIFI(char* addr, char* port)
 	if (cnt < 8)
 	{
 		WIFI_Enable_MultipleId(DISABLE);
-		while (!WIFI_Link_Server(enumTCP, addr, port, Single_ID_0))
-			;
-//		while (!WIFI_UnvarnishSend())  //非透传模式
-//			;
-		return true;
+		if (WIFI_Link_Server(enumTCP, addr, port, Single_ID_0))
+		{
+			return true;
+		}
 	}
 	return false;
+}
+/**
+ * wifi上电
+ * @return 0-失败  1-succ
+ */
+u8 Wifi_PowerOn(void)
+{
+	//1.检查是否配置过wifi
+	if (MyFlashParams.WifiFlag == WIFI_FLAG)
+	{
+		//2.检查模块是否需要重新开关机
+		WIFI_Fram.AT_test_OK = AT_Test(InWifi);
+		if (!WIFI_Fram.AT_test_OK)
+		{
+			//3.执行开关机操作
+			_WIFI_RST = 0;
+			delay_ms(1000);
+			delay_ms(1000);
+			_WIFI_RST = 1;
+			delay_ms(100);
+			//4.再次检查模块是否正常工作
+			WIFI_Fram.AT_test_OK = AT_Test(InWifi);
+		}
+		//5.如果模块已经正常工作
+		if (WIFI_Fram.AT_test_OK)
+		{
+			//6.执行TCP连接
+			WIFI_Fram.Online = ConnectToServerByWIFI(TCP_IP, TCP_PORT);
+			return WIFI_Fram.Online;
+		}
+	}
+	return 0;
 }
 
 void DMA1_Stream6_IRQHandler(void)
@@ -327,10 +362,10 @@ void USART2_IRQHandler(void)
 		WIFI_Fram.DMA_Tx_Busy = 0;
 #if SYSTEM_SUPPORT_OS
 		//推送发送完成
-		OSFlagPost((OS_FLAG_GRP*) &EventFlags, //对应的事件标志组
-				(OS_FLAGS) FLAG_USART2_TxED, //事件位
-				(OS_OPT) OS_OPT_POST_FLAG_SET, //选择置位
-				(OS_ERR*) &err); //错误码
+		OSFlagPost((OS_FLAG_GRP*) &EventFlags,//对应的事件标志组
+				(OS_FLAGS) FLAG_USART2_TxED,//事件位
+				(OS_OPT) OS_OPT_POST_FLAG_SET,//选择置位
+				(OS_ERR*) &err);//错误码
 #endif
 	}
 	if (USART_GetITStatus(USART2, USART_IT_IDLE) != RESET)
@@ -338,22 +373,23 @@ void USART2_IRQHandler(void)
 		USART2->SR; //先读SR，再读DR
 		USART2->DR;
 
-		WIFI_Fram.InfBit.FinishFlag = 1;
-
 		//关闭DMA
 		DMA_Cmd(DMA1_Stream5, DISABLE);
 		//清除标志位
-		DMA_ClearFlag(DMA1_Stream5, DMA_FLAG_TCIF1);
+		DMA_ClearFlag(DMA1_Stream5, DMA_FLAG_TCIF5);
 		//获得接收帧帧长
 		WIFI_Fram.AccessLen = TCP_MAX_LEN
 				- DMA_GetCurrDataCounter(DMA1_Stream5);
+		WIFI_Fram.RxBuf[WIFI_Fram.AccessLen] = '\0'; //添加结束符
+
+		WIFI_Fram.FinishFlag = 1;
 		//这里可以通知任务来处理数据
 #if SYSTEM_SUPPORT_OS
 		//推送接收完成
-		OSFlagPost((OS_FLAG_GRP*) &EventFlags, //对应的事件标志组
-				(OS_FLAGS) FLAG_USART2_RxED, //事件位
-				(OS_OPT) OS_OPT_POST_FLAG_SET, //选择置位
-				(OS_ERR*) &err); //错误码
+		OSFlagPost((OS_FLAG_GRP*) &EventFlags,//对应的事件标志组
+				(OS_FLAGS) FLAG_USART2_RxED,//事件位
+				(OS_OPT) OS_OPT_POST_FLAG_SET,//选择置位
+				(OS_ERR*) &err);//错误码
 #endif
 		//设置传输数据长度
 		DMA_SetCurrDataCounter(DMA1_Stream5, TCP_MAX_LEN);

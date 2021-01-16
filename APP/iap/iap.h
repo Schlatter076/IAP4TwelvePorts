@@ -16,11 +16,8 @@ extern uint32_t JumpAddress;
 #define ApplicationAddress    0x08010000
 
 void IAP_Init(void);
-void IAP_RunApp(void);
-void IAP_Main_Menu(struct STRUCT_USART_Fram *fram);
-int8_t IAP_Update(struct STRUCT_USART_Fram *fram);
-int8_t IAP_Upload(void);
-int8_t IAP_Erase(void);
-u8 Set_DeviceID(void);
-void Get_DeviceID(void);
+u8 IAP_RunApp(void);
+void IAP_Main_Menu(u8 Internet);
+int8_t IAP_Update(u8 Internet);
+u8 IAP_Set_DeviceID(u8 Internet);
 #endif
