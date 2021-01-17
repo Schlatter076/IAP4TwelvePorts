@@ -218,19 +218,19 @@ int8_t IAP_Update(u8 net)
 	//数据全部写入了flash
 	//进行MD5校验
 	memset(m, '\0', 33);
-	getMD5Str(m, flashBuf, 128);
-	if (strcmp(m, md5) == 0) //MD5校验成功
+//	getMD5Str(m, flashBuf, 128);
+//	if (strcmp(m, md5) == 0) //MD5校验成功
+//	{
+	DEBUG("All datas has been recieved,md5=%s!\r\n", m);
+	IAP_request4UpdateComp(net);
+	if (IAP_analyse(net, &cmd, ServerData, BASE64_BUF_LEN, 100))
 	{
-		DEBUG("All datas has been recieved,md5=%s!\r\n", m);
-		IAP_request4UpdateComp(net);
-		if (IAP_analyse(net, &cmd, ServerData, BASE64_BUF_LEN, 100))
-		{
-			IAP_process(net, cmd, ServerData);
-			myfree(ServerData);
-			updating = false;
-			return 1;
-		}
+		IAP_process(net, cmd, ServerData);
+		myfree(ServerData);
+		updating = false;
+		return 1;
 	}
+//	}
 	//这里是出错后数据解析
 	ERROR: IAP_request4Error(net); //出错了
 	if (IAP_analyse(net, &cmd, ServerData, BASE64_BUF_LEN, 100))

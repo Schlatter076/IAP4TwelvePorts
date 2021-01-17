@@ -22,7 +22,7 @@
 #include "F4G.h"
 #include "wifi.h"
 
-#define TCP_MAX_LEN 640		  //最大接收缓存字节数
+#define TCP_MAX_LEN 1024		  //最大接收缓存字节数
 #define BASE64_BUF_LEN 512
 
 struct STRUCT_USART_Fram  //定义一个全局串口数据帧的处理结构体
