@@ -172,6 +172,10 @@ void getModuleMes(void)
 			{
 				result++;
 			}
+			if (*result == '0')  //防止模块忙时全部填充0
+			{
+				continue;
+			}
 			//当值为字母和数字时
 			while ((*result <= '9' && *result >= '0')
 					|| (*result <= 'Z' && *result >= 'A')
