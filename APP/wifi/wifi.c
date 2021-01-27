@@ -165,7 +165,7 @@ bool WIFI_Link_Server(ENUM_NetPro_TypeDef enumE, char * ip, char* ComNum,
 	else
 		sprintf(cCmd, "AT+CIPSTART=%s", cStr);
 
-	rc = Send_AT_Cmd(InWifi, cCmd, "OK", "ALREAY CONNECT", 1800, 2, ENABLE);
+	rc = Send_AT_Cmd(InWifi, cCmd, "OK", "ALREADY CONNECT", 1800, 2, ENABLE);
 	myfree(cStr);
 	myfree(cCmd);
 	return rc;
